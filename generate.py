@@ -397,6 +397,7 @@ def generate_output(events_file, staff_file, roster_file, output_file, status_ca
         bookable_col = header_map.get("bookable hours")
         month_col = header_map.get("month")
         config_col = header_map.get("configuration")  # read configuration column if present
+        product_col = header_map.get("product")  # <-- NEW: product column for GALAXEA sheet
         if month_col is None or activity_col is None or bookable_col is None:
             continue
         date_start_col = month_col + 1
@@ -474,8 +475,18 @@ def generate_output(events_file, staff_file, roster_file, output_file, status_ca
             if not event_names:
                 continue
 
-            # Use configuration name (normalized) to fetch instructors for ALL events
-            instr_lookup_key = config_for_main.strip().lower() if config_for_main else activity_key
+            # ---------- MODIFIED: determine instr_lookup_key ----------
+            # For AKUN and WAMA: keep existing logic (configuration/activity)
+            # For GALAXEA: prefer Product column value (normalized) to lookup instructors
+            instr_lookup_key = None
+            if sheet_name.upper() == "GALAXEA" and product_col:
+                product_raw = ws_src.cell(row=r, column=product_col).value
+                product_val = safe_str(product_raw)
+                if product_val:
+                    instr_lookup_key = product_val.strip().lower()
+            # fallback to configuration or activity if not set by Product (or for other sheets)
+            if not instr_lookup_key:
+                instr_lookup_key = config_for_main.strip().lower() if config_for_main else activity_key
 
             # make cache key include sheet and instr_lookup_key
             cache_key = (sheet_name.upper(), instr_lookup_key)
@@ -566,7 +577,7 @@ def generate_output(events_file, staff_file, roster_file, output_file, status_ca
                             out_row += 1
                             written_main_rows.add(main_key)
 
-                        # Only instructors from correct staff tab and matching configuration
+                        # Only instructors from correct staff tab and matching configuration/product
                         instrs_to_use = [i for i in qualified_instrs if i in roster_available and i not in off_instr_names]
 
                         for instr in instrs_to_use:
@@ -600,6 +611,7 @@ def generate_output(events_file, staff_file, roster_file, output_file, status_ca
     if status_callback:
         status_callback(progress_state['total'], progress_state['total'], "Finished generating output")
     print(f"✅ Output saved to {output_file}")
+
 
 # ---------- PREVIEW ----------
 def get_preview(output_file):
