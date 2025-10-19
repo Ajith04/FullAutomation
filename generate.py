@@ -15,8 +15,7 @@ warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
 # ---------- CONFIG ----------
 TARGET_SHEETS = ["AKUN", "WAMA", "GALAXEA"]
 TARGET_RED = "FFC00000"
-# Added "Venue" as the last header (after Reference)
-HEADERS = ["Event", "Resource", "Configuration", "Date", "Start Time", "End Time", "Capacity", "Reference", "Venue"]
+HEADERS = ["Event", "Resource", "Configuration", "Date", "Start Time", "End Time", "Capacity", "Reference", "Venue"]  # Added Venue column
 HEADER_FILL = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
 HEADER_FONT = Font(bold=True)
 ROW_BOLD_FONT = Font(bold=True)
@@ -136,7 +135,6 @@ def get_last_data_row(ws, col_idx):
 def preload_staff(staff_file, status_callback=None, progress_state=None):
     wb = load_workbook(staff_file, data_only=True)
     result = {}
-    # map workbook sheet names case-insensitively using UPPER
     staff_sheet_map = {s.upper(): s for s in wb.sheetnames}
     for target in TARGET_SHEETS:
         actual_sheet = staff_sheet_map.get(target.upper())
@@ -167,7 +165,6 @@ def preload_staff(staff_file, status_callback=None, progress_state=None):
                 if is_red(val_cell):
                     r += 1
                     continue
-                # normalize activity/config key to lower-case (staff specialty text)
                 key = val.strip().lower()
                 sheet_map.setdefault(key, []).append(instr_name)
                 r += 1
@@ -175,16 +172,10 @@ def preload_staff(staff_file, status_callback=None, progress_state=None):
     return result
 
 def preload_roster(roster_file, status_callback=None, progress_state=None):
-    """
-    Returns availability, off_days
-    status_callback(current, total, message) is optional.
-    progress_state: dict with keys 'current' and 'total' to update row-level progress.
-    """
     wb = load_workbook(roster_file, data_only=True)
     availability = {}
     off_days = {}
     for sheet_name in wb.sheetnames:
-        # update progress for the header row scanning as well (approx)
         if progress_state is not None and status_callback is not None:
             progress_state['current'] += 1
             status_callback(progress_state['current'], progress_state['total'], f"Preloading Roster sheet {sheet_name}")
@@ -196,7 +187,6 @@ def preload_roster(roster_file, status_callback=None, progress_state=None):
         ws = wb[sheet_name]
         team_cell = None
         for r in range(1, ws.max_row + 1):
-            # update progress when scanning to find team members header
             if progress_state is not None and status_callback is not None:
                 progress_state['current'] += 1
                 status_callback(progress_state['current'], progress_state['total'], f"Preloading Roster {sheet_name} scanning row {r}")
@@ -226,11 +216,9 @@ def preload_roster(roster_file, status_callback=None, progress_state=None):
                         date_cols.append((c, dnum))
                 except:
                     break
-        # use true last row for team column
         last_row_for_team = get_last_data_row(ws, team_col)
         r = team_row + 1
         while r <= last_row_for_team:
-            # per-row progress update
             if progress_state is not None and status_callback is not None:
                 progress_state['current'] += 1
                 status_callback(progress_state['current'], progress_state['total'], f"Preloading Roster {sheet_name} row {r}")
@@ -426,7 +414,7 @@ def generate_output(events_file, staff_file, roster_file, output_file, status_ca
 
             resort = safe_str(ws_src.cell(row=r, column=resort_col).value) if resort_col else ""
             # Venue is taken directly from Resort Name column value
-            venue_name = resort
+            venue_name = f"{sheet_name}-{resort}" if resort else sheet_name
 
             month_val = ws_src.cell(row=r, column=month_col).value
 
