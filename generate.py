@@ -15,7 +15,8 @@ warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
 # ---------- CONFIG ----------
 TARGET_SHEETS = ["AKUN", "WAMA", "GALAXEA"]
 TARGET_RED = "FFC00000"
-HEADERS = ["Event", "Resource", "Configuration", "Date", "Start Time", "End Time", "Capacity", "Reference"]
+# Added "Venue" as the last header (after Reference)
+HEADERS = ["Event", "Resource", "Configuration", "Date", "Start Time", "End Time", "Capacity", "Reference", "Venue"]
 HEADER_FILL = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
 HEADER_FONT = Font(bold=True)
 ROW_BOLD_FONT = Font(bold=True)
@@ -424,6 +425,9 @@ def generate_output(events_file, staff_file, roster_file, output_file, status_ca
             activity_key = activity.strip().lower()
 
             resort = safe_str(ws_src.cell(row=r, column=resort_col).value) if resort_col else ""
+            # Venue is taken directly from Resort Name column value
+            venue_name = resort
+
             month_val = ws_src.cell(row=r, column=month_col).value
 
             # read configuration (preferred) — fallback to activity
@@ -518,12 +522,16 @@ def generate_output(events_file, staff_file, roster_file, output_file, status_ca
                         off_row_key = ("OFF", instr_name, date_str)
                         if off_row_key in written_instructor_rows:
                             continue
-                        ws_out.cell(row=out_row, column=1, value=off_code)
-                        ws_out.cell(row=out_row, column=2, value=instr_name)
-                        ws_out.cell(row=out_row, column=3, value="")
-                        ws_out.cell(row=out_row, column=4, value=date_str)
-                        ws_out.cell(row=out_row, column=5, value="00:00:00")
-                        ws_out.cell(row=out_row, column=6, value="23:59:59")
+                        # Columns: Event, Resource, Configuration, Date, Start Time, End Time, Capacity, Reference, Venue
+                        ws_out.cell(row=out_row, column=1, value=off_code)       # Event column reused for OFF code
+                        ws_out.cell(row=out_row, column=2, value=instr_name)     # Resource
+                        ws_out.cell(row=out_row, column=3, value="")             # Configuration (blank)
+                        ws_out.cell(row=out_row, column=4, value=date_str)       # Date
+                        ws_out.cell(row=out_row, column=5, value="00:00:00")     # Start Time
+                        ws_out.cell(row=out_row, column=6, value="23:59:59")     # End Time
+                        # Capacity left blank for OFF rows (consistent with previous behavior)
+                        # Reference left blank (or could be set); keeping blank as before
+                        ws_out.cell(row=out_row, column=9, value=venue_name)     # Venue (from Resort Name)
                         written_instructor_rows.add(off_row_key)
                         out_row += 1
 
@@ -563,6 +571,7 @@ def generate_output(events_file, staff_file, roster_file, output_file, status_ca
                         main_key = internal_main_key
                         if main_key not in written_main_rows:
                             # resource_for_main already set above; config_for_main is the config value
+                            # write main row columns 1-7 (Event, Resource, Configuration, Date, Start, End, Capacity)
                             for col_idx, val in enumerate(
                                 [event, resource_for_main, config_for_main, date_str, start, end, capacity_val],
                                 start=1
@@ -572,8 +581,12 @@ def generate_output(events_file, staff_file, roster_file, output_file, status_ca
                                 cell.font = ROW_BOLD_FONT
                             month_short = MONTH_SHORT.get(month_num, f"{month_num:02d}")
                             reference_val = f"{sheet_name}-{resort}-{month_short}"
+                            # Reference (col 8)
                             ws_out.cell(row=out_row, column=8, value=reference_val).fill = fill
                             ws_out.cell(row=out_row, column=8).font = ROW_BOLD_FONT
+                            # Venue (col 9) populated from source Resort Name
+                            ws_out.cell(row=out_row, column=9, value=venue_name).fill = fill
+                            ws_out.cell(row=out_row, column=9).font = ROW_BOLD_FONT
                             out_row += 1
                             written_main_rows.add(main_key)
 
@@ -589,11 +602,17 @@ def generate_output(events_file, staff_file, roster_file, output_file, status_ca
                             # config_for_instr must be the configuration value (what we used to lookup instructors)
                             config_for_instr = config_for_main
 
+                            # write instructor row: Event, Resource(instructor), Configuration, Date, Start, End
                             for col_idx, val in enumerate([event, instr, config_for_instr, date_str, start, end], start=1):
                                 cell = ws_out.cell(row=out_row, column=col_idx, value=val)
                                 cell.fill = fill
+                            # Capacity (col 7)
                             ws_out.cell(row=out_row, column=7, value=capacity_val)
+                            # Reference (col 8)
                             ws_out.cell(row=out_row, column=8, value=reference_val)
+                            # Venue (col 9) from source Resort Name
+                            ws_out.cell(row=out_row, column=9, value=venue_name)
+                            # mark as written
                             written_instructor_rows.add(instr_key)
                             out_row += 1
 
@@ -611,7 +630,6 @@ def generate_output(events_file, staff_file, roster_file, output_file, status_ca
     if status_callback:
         status_callback(progress_state['total'], progress_state['total'], "Finished generating output")
     print(f"✅ Output saved to {output_file}")
-
 
 # ---------- PREVIEW ----------
 def get_preview(output_file):
