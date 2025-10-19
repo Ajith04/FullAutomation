@@ -414,7 +414,7 @@ def generate_output(events_file, staff_file, roster_file, output_file, status_ca
 
             resort = safe_str(ws_src.cell(row=r, column=resort_col).value) if resort_col else ""
             # Venue is taken directly from Resort Name column value
-            venue_name = f"{sheet_name}-{resort}" if resort else sheet_name
+            venue_name = f"{sheet_name} - {resort}" if resort else sheet_name
 
             month_val = ws_src.cell(row=r, column=month_col).value
 
