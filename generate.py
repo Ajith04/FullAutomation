@@ -556,27 +556,42 @@ def generate_output(events_file, staff_file, roster_file, output_file, status_ca
                             continue
                         start, end = normalize_time_excel(parts[0]), normalize_time_excel(parts[1])
 
-                        main_key = internal_main_key
-                        if main_key not in written_main_rows:
-                            # resource_for_main already set above; config_for_main is the config value
-                            # write main row columns 1-7 (Event, Resource, Configuration, Date, Start, End, Capacity)
-                            for col_idx, val in enumerate(
-                                [event, resource_for_main, config_for_main, date_str, start, end, capacity_val],
-                                start=1
-                            ):
+                        # write main event row for every slot (so all times are captured)
+                        for col_idx, val in enumerate(
+                            [event, resource_for_main, config_for_main, date_str, start, end, capacity_val],
+                            start=1
+                        ):
+                            cell = ws_out.cell(row=out_row, column=col_idx, value=val)
+                            cell.fill = fill
+                            cell.font = ROW_BOLD_FONT
+
+                        month_short = MONTH_SHORT.get(month_num, f"{month_num:02d}")
+                        reference_val = f"{sheet_name}-{resort}-{month_short}"
+                        ws_out.cell(row=out_row, column=8, value=reference_val).fill = fill
+                        ws_out.cell(row=out_row, column=8).font = ROW_BOLD_FONT
+                        ws_out.cell(row=out_row, column=9, value=venue_name).fill = fill
+                        ws_out.cell(row=out_row, column=9).font = ROW_BOLD_FONT
+                        out_row += 1
+
+                        # Only instructors from correct staff tab and matching configuration/product
+                        instrs_to_use = [i for i in qualified_instrs if i in roster_available and i not in off_instr_names]
+
+                        for instr in instrs_to_use:
+                            instr_key = (event.strip().lower(), resort.strip().lower(), instr, date_str, start, end)
+                            if instr_key in written_instructor_rows:
+                                continue
+
+                            config_for_instr = config_for_main
+                            for col_idx, val in enumerate([event, instr, config_for_instr, date_str, start, end], start=1):
                                 cell = ws_out.cell(row=out_row, column=col_idx, value=val)
                                 cell.fill = fill
-                                cell.font = ROW_BOLD_FONT
-                            month_short = MONTH_SHORT.get(month_num, f"{month_num:02d}")
-                            reference_val = f"{sheet_name}-{resort}-{month_short}"
-                            # Reference (col 8)
-                            ws_out.cell(row=out_row, column=8, value=reference_val).fill = fill
-                            ws_out.cell(row=out_row, column=8).font = ROW_BOLD_FONT
-                            # Venue (col 9) populated from source Resort Name
-                            ws_out.cell(row=out_row, column=9, value=venue_name).fill = fill
-                            ws_out.cell(row=out_row, column=9).font = ROW_BOLD_FONT
+                            ws_out.cell(row=out_row, column=7, value=capacity_val)
+                            ws_out.cell(row=out_row, column=8, value=reference_val)
+                            ws_out.cell(row=out_row, column=9, value=venue_name)
+                            written_instructor_rows.add(instr_key)
                             out_row += 1
-                            written_main_rows.add(main_key)
+
+
 
                         # Only instructors from correct staff tab and matching configuration/product
                         instrs_to_use = [i for i in qualified_instrs if i in roster_available and i not in off_instr_names]
