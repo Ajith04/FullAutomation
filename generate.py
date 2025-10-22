@@ -501,7 +501,7 @@ def generate_output(events_file, staff_file, roster_file, output_file, status_ca
             for (day_num, capacity_val) in available_days:
                 date_str = f"{YEAR_FOR_OUTPUT}-{month_num:02d}-{day_num:02d}"
                 roster_key = (month_num, int(day_num), resort_short) if resort_short else None
-                roster_available = availability.get(roster_key, set()) if roster_key else set()
+                roster_available = {r.lower() for r in (availability.get(roster_key, set()) if roster_key else set())}
                 off_for_date = off_days.get((month_num, int(day_num)), {})
 
                 # OFF rows only for AKUN sheet
@@ -523,10 +523,12 @@ def generate_output(events_file, staff_file, roster_file, output_file, status_ca
                         written_instructor_rows.add(off_row_key)
                         out_row += 1
 
-                off_instr_names = set(off_for_date.keys())
+                off_instr_names = {name.lower() for name in off_for_date.keys()}
+
+                
 
                 for event in event_names:
-                    # ensure unique internal main key per resort + date (so events with same display name at different resorts don't collide)
+                    # unique event identifier for resort/date
                     internal_main_key = (event.strip().lower(), resort.strip().lower(), date_str)
 
                     if event not in event_color_cache:
@@ -548,6 +550,10 @@ def generate_output(events_file, staff_file, roster_file, output_file, status_ca
                         except Exception:
                             return val
 
+                    month_short = MONTH_SHORT.get(month_num, f"{month_num:02d}")
+                    reference_val = f"{sheet_name}-{resort}-{month_short}"
+
+                    # ---------- MAIN + INSTRUCTOR ROWS PER SLOT ----------
                     for slot in slots:
                         if "-" not in slot:
                             continue
@@ -556,7 +562,13 @@ def generate_output(events_file, staff_file, roster_file, output_file, status_ca
                             continue
                         start, end = normalize_time_excel(parts[0]), normalize_time_excel(parts[1])
 
-                        # write main event row for every slot (so all times are captured)
+                        # unique key per main event slot (prevents duplicate slot rows)
+                        main_slot_key = (event.strip().lower(), resort.strip().lower(), date_str, start, end)
+                        if main_slot_key in written_main_rows:
+                            continue
+                        written_main_rows.add(main_slot_key)
+
+                        # write one main event row for this slot
                         for col_idx, val in enumerate(
                             [event, resource_for_main, config_for_main, date_str, start, end, capacity_val],
                             start=1
@@ -565,16 +577,14 @@ def generate_output(events_file, staff_file, roster_file, output_file, status_ca
                             cell.fill = fill
                             cell.font = ROW_BOLD_FONT
 
-                        month_short = MONTH_SHORT.get(month_num, f"{month_num:02d}")
-                        reference_val = f"{sheet_name}-{resort}-{month_short}"
                         ws_out.cell(row=out_row, column=8, value=reference_val).fill = fill
                         ws_out.cell(row=out_row, column=8).font = ROW_BOLD_FONT
                         ws_out.cell(row=out_row, column=9, value=venue_name).fill = fill
                         ws_out.cell(row=out_row, column=9).font = ROW_BOLD_FONT
                         out_row += 1
 
-                        # Only instructors from correct staff tab and matching configuration/product
-                        instrs_to_use = [i for i in qualified_instrs if i in roster_available and i not in off_instr_names]
+                        # write instructor rows for this slot
+                        instrs_to_use = [i for i in qualified_instrs if i.lower() in roster_available and i.lower() not in off_instr_names]
 
                         for instr in instrs_to_use:
                             instr_key = (event.strip().lower(), resort.strip().lower(), instr, date_str, start, end)
@@ -585,39 +595,16 @@ def generate_output(events_file, staff_file, roster_file, output_file, status_ca
                             for col_idx, val in enumerate([event, instr, config_for_instr, date_str, start, end], start=1):
                                 cell = ws_out.cell(row=out_row, column=col_idx, value=val)
                                 cell.fill = fill
+
                             ws_out.cell(row=out_row, column=7, value=capacity_val)
                             ws_out.cell(row=out_row, column=8, value=reference_val)
                             ws_out.cell(row=out_row, column=9, value=venue_name)
+
                             written_instructor_rows.add(instr_key)
                             out_row += 1
 
 
 
-                        # Only instructors from correct staff tab and matching configuration/product
-                        instrs_to_use = [i for i in qualified_instrs if i in roster_available and i not in off_instr_names]
-
-                        for instr in instrs_to_use:
-                            # instructor uniqueness must also include resort so same instructor at different resorts/dates don't clash
-                            instr_key = (event.strip().lower(), resort.strip().lower(), instr, date_str, start, end)
-                            if instr_key in written_instructor_rows:
-                                continue
-
-                            # config_for_instr must be the configuration value (what we used to lookup instructors)
-                            config_for_instr = config_for_main
-
-                            # write instructor row: Event, Resource(instructor), Configuration, Date, Start, End
-                            for col_idx, val in enumerate([event, instr, config_for_instr, date_str, start, end], start=1):
-                                cell = ws_out.cell(row=out_row, column=col_idx, value=val)
-                                cell.fill = fill
-                            # Capacity (col 7)
-                            ws_out.cell(row=out_row, column=7, value=capacity_val)
-                            # Reference (col 8)
-                            ws_out.cell(row=out_row, column=8, value=reference_val)
-                            # Venue (col 9) from source Resort Name
-                            ws_out.cell(row=out_row, column=9, value=venue_name)
-                            # mark as written
-                            written_instructor_rows.add(instr_key)
-                            out_row += 1
 
     try:
         if wb_xlw:
